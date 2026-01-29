@@ -44,7 +44,9 @@ def load_user(user_id):
     if user:
         return user
     return Captain.query.get(int(user_id))
-
+#=========================================================
+#=========================================================
+#=========================================================
 @app.route('/')
 def home():
     houses = House.query.order_by(House.name).all()
@@ -87,7 +89,9 @@ def members():
 def announcements():
     announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
     return render_template('announcements.html', announcements=announcements)
-
+#=========================================================
+#=========================================================
+#=========================================================
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':

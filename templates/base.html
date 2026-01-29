@@ -23,9 +23,9 @@
             
             {% if current_user.is_authenticated %}
                 {% if current_user.__class__.__name__ == 'Admin' %}
-                    <a class="nav-item nav-link" href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+                    <a class="nav-item nav-link" href="{{ url_for('dashboard_admin') }}">Dashboard</a>
                 {% else %}
-                    <a class="nav-item nav-link" href="{{ url_for('captain_dashboard') }}">Dashboard</a>
+                    <a class="nav-item nav-link" href="{{ url_for('dashboard_captain') }}">Dashboard</a>
                 {% endif %}
                 <a class="nav-item nav-link" href="{{ url_for('logout') }}">Logout</a>
             {% else %}
