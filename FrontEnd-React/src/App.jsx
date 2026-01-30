@@ -5,7 +5,7 @@ import "./App.css";
 import Navbar from "./components/navbar/navbar";
 
 import HomePage from "./components/pages/homepage/homePage";
-import LeaderBoard from "./components/pages/leaderBoard/leaderBoard";
+import LiveScores from "./components/pages/livescores/livescores";
 import Announcement from "./components/pages/announcement/announcement";
 
 function App() {
@@ -16,7 +16,7 @@ function App() {
       <Navbar></Navbar>
       <Routes>
         <Route path="/" Component={HomePage}></Route>
-        <Route path="/leaderboard" Component={LeaderBoard}></Route>
+        <Route path="/leaderboard" Component={LiveScores}></Route>
         <Route path="/announcement" Component={Announcement}></Route>
       </Routes>
     </>
