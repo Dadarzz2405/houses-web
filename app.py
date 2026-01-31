@@ -71,7 +71,7 @@ def get_houses():
         for h in houses
     ])
 
-@app.route('/api/live-scores')
+@app.route('/api/live-points')
 def live_scores():
     houses = House.query.order_by(House.house_points.desc()).all()
     data = []
