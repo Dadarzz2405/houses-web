@@ -55,7 +55,7 @@ def load_user(user_id):
     return Captain.query.get(int(user_id))
 
 #=========================================================
-# PUBLIC API ROUTES (for React Frontend)
+#                   PUBLIC API ROUTES 
 #=========================================================
 
 @app.route("/api/houses")
@@ -141,7 +141,7 @@ def announcements():
     ])
 
 #=========================================================
-# JINJA TEMPLATE ROUTES (for Admin/Captain Dashboards)
+#                   JINJA TEMPLATE ROUTES
 #=========================================================
 
 @app.route('/')
@@ -243,7 +243,7 @@ def admin_deduct_points():
 
     transaction = PointTransaction(
         house_id=house.id,
-        points_change=-points,  # Negative for deduction
+        points_change=-points,  
         reason=reason,
         admin_id=current_user.id
     )
