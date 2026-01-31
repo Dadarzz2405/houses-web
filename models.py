@@ -106,8 +106,11 @@ class Announcement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False)
-
+    created_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow
+    )
     house_id = db.Column(db.Integer, db.ForeignKey('houses.id'), nullable=False)
     captain_id = db.Column(db.Integer, db.ForeignKey('captains.id'), nullable=True)
 

@@ -1,4 +1,5 @@
 from werkzeug.security import generate_password_hash
+from datetime import datetime
 from app import app
 from models import (
     db,
@@ -7,10 +8,12 @@ from models import (
     Captain,
     Advisor,
     Member,
-    Achievement
+    Achievement,
+    Announcement
 )
 
 PASSWORD = generate_password_hash("tes123")
+
 
 def seed_mock_data():
     with app.app_context():
@@ -69,6 +72,33 @@ def seed_mock_data():
                     )
                 )
 
+        db.session.flush()
+
+        # ================= ANNOUNCEMENTS =================
+        announcements_data = [
+            ("Welcome Announcement", "Welcome to the new house season!"),
+            ("Training Session", "House training will begin this Friday."),
+            ("Team Reminder", "Remember to wear house shirts every Monday."),
+        ]
+
+        for captain in Captain.query.all():
+            for title, content in announcements_data:
+                exists = Announcement.query.filter_by(
+                    title=title,
+                    captain_id=captain.id
+                ).first()
+
+                if not exists:
+                    db.session.add(
+                        Announcement(
+                            title=title,
+                            content=content,
+                            created_at=datetime.utcnow(),
+                            house_id=captain.house_id,
+                            captain_id=captain.id
+                        )
+                    )
+
         # ================= ADVISORS =================
         advisors_data = [
             ("Mr. Rahman", "House Advisor", "rahman", "Al-Ghuraab"),
@@ -109,7 +139,10 @@ def seed_mock_data():
         ]
 
         for name, role, house_name in members_data:
-            if not Member.query.filter_by(name=name, house_id=houses[house_name].id).first():
+            if not Member.query.filter_by(
+                name=name,
+                house_id=houses[house_name].id
+            ).first():
                 db.session.add(
                     Member(
                         name=name,
@@ -127,7 +160,10 @@ def seed_mock_data():
 
         for house in houses.values():
             for title, desc in achievements_data:
-                if not Achievement.query.filter_by(name=title, house_id=house.id).first():
+                if not Achievement.query.filter_by(
+                    name=title,
+                    house_id=house.id
+                ).first():
                     db.session.add(
                         Achievement(
                             name=title,
