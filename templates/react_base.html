@@ -25,7 +25,6 @@
         <script type="module" src="http://localhost:5173/@vite/client"></script>
         <script type="module" src="http://localhost:5173/src/main.jsx"></script>
     {% else %}
-        <!-- Production mode - built static files -->
         <link rel="stylesheet" href="{{ url_for('static', filename='dist/assets/index.css') }}">
         <script type="module" src="{{ url_for('static', filename='dist/assets/index.js') }}"></script>
     {% endif %}
