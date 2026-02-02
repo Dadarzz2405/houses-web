@@ -13,17 +13,23 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = \
     'sqlite:///' + os.path.join(basedir, 'app.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = '330bf9312848e19d9a88482a033cb4f566c4cbe06911fe1e452ebade42f0bc4c'  
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '330bf9312848e19d9a88482a033cb4f566c4cbe06911fe1e452ebade42f0bc4c')
 
-# CORS Configuration - Allow React frontend (port 5173)
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["http://localhost:5173"],
-        "methods": ["GET", "POST", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type"],
-        "supports_credentials": True
-    }
-})
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",  
+    "http://localhost:5000",  
+    "https://houses-web.onrender.com",  
+    # Add your Netlify URL here once you deploy, e.g.:
+    # "https://gda-houses.netlify.app"
+    # "https://your-site-name.netlify.app"
+]
+
+CORS(app, 
+     resources={r"/api/*": {"origins": ALLOWED_ORIGINS}},
+     supports_credentials=True,
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+)
 
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -159,32 +165,36 @@ def api_login():
     if user and check_password_hash(user.password_hash, password):
         login_user(user)
         
+        base_url = os.environ.get('BASE_URL', 'http://localhost:5000')
+        
         if isinstance(user, Admin):
             return jsonify({
                 'success': True,
                 'role': 'admin',
-                'redirect': 'http://localhost:5000/admin/dashboard'
+                'redirect': f'{base_url}/admin/dashboard'
             })
         else:
             return jsonify({
                 'success': True,
                 'role': 'captain',
-                'redirect': 'http://localhost:5000/captain/dashboard'
+                'redirect': f'{base_url}/captain/dashboard'
             })
     
     return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
 
 @app.route('/login', methods=['GET'])
 def login():
-    # Just redirect to React app for login UI
-    return redirect('http://localhost:5173/login')
+    # Redirect to frontend login page
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+    return redirect(f'{frontend_url}/login')
 
 @app.route('/logout')
 @login_required
 def logout():
     logout_user()
     flash('You have been logged out.', 'success')
-    return redirect('http://localhost:5173/login')
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+    return redirect(f'{frontend_url}/login')
 
 #=========================================================
 #                   JINJA TEMPLATE ROUTES (Admin)
@@ -333,19 +343,6 @@ def captain_delete_announcement(announcement_id):
     db.session.commit()
     flash('Announcement deleted successfully.', 'success')
     return redirect(url_for('captain_dashboard'))
-
-#=========================================================
-#                   REACT FRONTEND ROUTES (SPA)
-#=========================================================
-
-@app.route('/')
-@app.route('/<path:path>')
-def serve_react(path=''):
-    """Serve React app for all non-admin/captain/login routes"""
-    # Don't serve React for admin/captain routes
-    if path.startswith('admin') or path.startswith('captain'):
-        abort(404)
-    return render_template('react_base.html')
 
 #=========================================================
 #                   ERROR HANDLERS
