@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, redirect, url_for, abort, request, flash, jsonify
+from flask import Flask, redirect, abort, request, jsonify
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 from flask_migrate import Migrate
@@ -7,6 +7,7 @@ from functools import wraps
 from flask_cors import CORS
 from models import Announcement, PointTransaction, db, Admin, House, Captain, Member, Achievement
 from werkzeug.middleware.proxy_fix import ProxyFix
+from datetime import datetime
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -19,6 +20,7 @@ app.config['SECRET_KEY'] = os.environ.get(
     '330bf9312848e19d9a88482a033cb4f566c4cbe06911fe1e452ebade42f0bc4c'
 )
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 # Session config for cross-origin cookies
 app.config.update(
     SESSION_COOKIE_SAMESITE="None",
@@ -26,7 +28,6 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
 )
 
-# ✅ Global CORS (THIS is the only CORS you need)
 CORS(
     app,
     supports_credentials=True,
@@ -56,7 +57,7 @@ def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not isinstance(current_user, Admin):
-            abort(403)
+            return jsonify({"error": "Admin access required"}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -64,7 +65,7 @@ def captain_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if not isinstance(current_user, Captain):
-            abort(403)
+            return jsonify({"error": "Captain access required"}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -174,19 +175,14 @@ def api_login():
     if user and check_password_hash(user.password_hash, password):
         login_user(user, remember=True)
 
-        base_url = os.environ.get(
-            'BASE_URL',
-            'https://houses-web.onrender.com'
-        )
-
         return jsonify({
             "success": True,
             "role": "admin" if isinstance(user, Admin) else "captain",
-            "redirect": (
-                f"{base_url}/admin/dashboard"
-                if isinstance(user, Admin)
-                else f"{base_url}/captain/dashboard"
-            )
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "name": user.name
+            }
         })
 
     return jsonify({"error": "Invalid username or password"}), 401
@@ -196,64 +192,243 @@ def api_login():
 def me():
     return jsonify({
         "id": current_user.id,
-        "role": "admin" if isinstance(current_user, Admin) else "captain"
+        "username": current_user.username,
+        "name": current_user.name,
+        "role": "admin" if isinstance(current_user, Admin) else "captain",
+        "house_id": current_user.house_id if isinstance(current_user, Captain) else None
     })
 
-@app.route('/logout')
+@app.route('/api/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
-    frontend = os.environ.get(
-        'FRONTEND_URL',
-        'https://darsahouse.netlify.app'
-    )
-    return redirect(f"{frontend}/login")
+    return jsonify({"success": True, "message": "Logged out successfully"})
 
 # =====================
-# DASHBOARDS
+# ADMIN ROUTES
 # =====================
 
-@app.route('/admin/dashboard')
+@app.route('/api/admin/dashboard', methods=['GET'])
 @login_required
 @admin_required
 def admin_dashboard():
     houses = House.query.order_by(House.house_points.desc()).all()
-    tx = PointTransaction.query.order_by(
+    recent_transactions = PointTransaction.query.order_by(
         PointTransaction.timestamp.desc()
     ).limit(10).all()
-    return render_template(
-        'dashboard_admin.html',
-        houses=houses,
-        recent_transactions=tx
-    )
+    
+    return jsonify({
+        "houses": [
+            {
+                "id": h.id,
+                "name": h.name,
+                "points": h.house_points,
+                "description": h.description
+            }
+            for h in houses
+        ],
+        "recent_transactions": [
+            {
+                "id": t.id,
+                "house": {
+                    "id": t.house.id,
+                    "name": t.house.name
+                },
+                "points_change": t.points_change,
+                "reason": t.reason,
+                "timestamp": t.timestamp.isoformat(),
+                "admin": {
+                    "id": t.admin.id,
+                    "name": t.admin.name
+                }
+            }
+            for t in recent_transactions
+        ]
+    })
 
-@app.route('/captain/dashboard')
+@app.route('/api/admin/points/add', methods=['POST'])
+@login_required
+@admin_required
+def admin_add_points():
+    data = request.get_json()
+    house_id = data.get('house_id')
+    points = data.get('points')
+    reason = data.get('reason', '').strip()
+
+    if not house_id or not points or not reason:
+        return jsonify({"error": "All fields are required"}), 400
+
+    if points <= 0:
+        return jsonify({"error": "Points must be a positive integer"}), 400
+    
+    house = House.query.get_or_404(house_id)
+    house.house_points += points
+
+    transaction = PointTransaction(
+        house_id=house.id,
+        points_change=points,
+        reason=reason,
+        admin_id=current_user.id
+    )
+    db.session.add(transaction)
+    db.session.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": f"Successfully added {points} points to {house.name}",
+        "house": {
+            "id": house.id,
+            "name": house.name,
+            "points": house.house_points
+        }
+    })
+
+@app.route('/api/admin/points/deduct', methods=['POST'])
+@login_required
+@admin_required
+def admin_deduct_points():
+    data = request.get_json()
+    house_id = data.get('house_id')
+    points = data.get('points')
+    reason = data.get('reason', '').strip()
+
+    if not house_id or not points or not reason:
+        return jsonify({"error": "All fields are required"}), 400
+
+    if points <= 0:
+        return jsonify({"error": "Points must be a positive integer"}), 400
+    
+    house = House.query.get_or_404(house_id)
+    house.house_points -= points
+
+    transaction = PointTransaction(
+        house_id=house.id,
+        points_change=-points,  
+        reason=reason,
+        admin_id=current_user.id
+    )
+    db.session.add(transaction)
+    db.session.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": f"Successfully deducted {points} points from {house.name}",
+        "house": {
+            "id": house.id,
+            "name": house.name,
+            "points": house.house_points
+        }
+    })
+
+# =====================
+# CAPTAIN ROUTES
+# =====================
+
+@app.route('/api/captain/dashboard', methods=['GET'])
 @login_required
 @captain_required
 def captain_dashboard():
     house = House.query.get(current_user.house_id)
     members = Member.query.filter_by(house_id=current_user.house_id).all()
-    anns = Announcement.query.filter_by(
+
+    my_announcements = Announcement.query.filter_by(
         captain_id=current_user.id
     ).order_by(Announcement.created_at.desc()).all()
-    return render_template(
-        'dashboard_captain.html',
-        house=house,
-        members=members,
-        my_announcements=anns
+    
+    return jsonify({
+        "house": {
+            "id": house.id,
+            "name": house.name,
+            "points": house.house_points,
+            "description": house.description
+        },
+        "members": [
+            {
+                "id": m.id,
+                "name": m.name,
+                "role": m.role
+            }
+            for m in members
+        ],
+        "my_announcements": [
+            {
+                "id": a.id,
+                "title": a.title,
+                "content": a.content,
+                "created_at": a.created_at.isoformat()
+            }
+            for a in my_announcements
+        ]
+    })
+
+@app.route('/api/captain/announcements/create', methods=['POST'])
+@login_required
+@captain_required
+def captain_create_announcement():
+    data = request.get_json()
+    title = data.get('title', '').strip()
+    content = data.get('content', '').strip()
+
+    if not title or not content:
+        return jsonify({"error": "Title and content are required"}), 400
+    
+    if len(title) > 200:
+        return jsonify({"error": "Title must be less than 200 characters"}), 400
+    
+    announcement = Announcement(
+        title=title,
+        content=content,
+        house_id=current_user.house_id,
+        captain_id=current_user.id,
+        created_at=datetime.utcnow()
     )
 
+    db.session.add(announcement)
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "message": "Announcement created successfully",
+        "announcement": {
+            "id": announcement.id,
+            "title": announcement.title,
+            "content": announcement.content,
+            "created_at": announcement.created_at.isoformat()
+        }
+    })
+
+@app.route('/api/captain/announcements/<int:announcement_id>/delete', methods=['DELETE'])
+@login_required
+@captain_required
+def captain_delete_announcement(announcement_id):
+    announcement = Announcement.query.get_or_404(announcement_id)
+    
+    if announcement.captain_id != current_user.id:
+        return jsonify({"error": "You can only delete your own announcements"}), 403
+    
+    db.session.delete(announcement)
+    db.session.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": "Announcement deleted successfully"
+    })
+
 # =====================
-# ERRORS
+# ERROR HANDLERS
 # =====================
 
 @app.errorhandler(403)
 def forbidden(e):
-    return render_template('403.html'), 403
+    return jsonify({"error": "Forbidden"}), 403
 
 @app.errorhandler(404)
 def not_found(e):
-    return render_template('404.html'), 404
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({"error": "Internal server error"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
