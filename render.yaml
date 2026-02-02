@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: houses-web
+    env: python
+    buildCommand: "pip install -r requirements.txt && python db_init.py && python mock_seed.py"
+    startCommand: "gunicorn app:app"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: BASE_URL
+        value: https://houses-web.onrender.com
+      - key: FRONTEND_URL
+        value: https://darsahouse.netlify.app
