@@ -65,6 +65,10 @@ def load_user(user_id):
         return user
     return Captain.query.get(int(user_id))
 
+@login_manager.unauthorized_handler
+def unauthorized():
+    return jsonify({"error": "Unauthorized"}), 401
+
 #=========================================================
 #                   PUBLIC API ROUTES 
 #=========================================================
