@@ -17,12 +17,12 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '330bf9312848e19d9a88482
 
 # Session configuration - use Lax for same-site, None for cross-site
 app.config.update(
-    SESSION_COOKIE_SAMESITE="None",  # Required for cross-origin requests
-    SESSION_COOKIE_SECURE=True,      # Required when SameSite=None
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
 )
 
-# CORS configuration - MUST allow credentials for cross-origin cookies
+# CORS configuration
 CORS(app, 
      resources={r"/*": {"origins": [
          "http://localhost:5173",
@@ -30,10 +30,10 @@ CORS(app,
          "https://houses-web.onrender.com",
          "https://darsahouse.netlify.app"
      ]}},
-     supports_credentials=True,  # This is critical!
+     supports_credentials=True,
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-     expose_headers=["Set-Cookie"]  # Allow cookies to be sent
+     expose_headers=["Set-Cookie"]
 )
 
 db.init_app(app)
@@ -61,14 +61,25 @@ def captain_required(f):
 
 @login_manager.user_loader
 def load_user(user_id):
+    print(f"🔍 Loading user with ID: {user_id}")
     user = Admin.query.get(int(user_id))
     if user:
+        print(f"✅ Found admin: {user.username}")
         return user
-    return Captain.query.get(int(user_id))
+    user = Captain.query.get(int(user_id))
+    if user:
+        print(f"✅ Found captain: {user.username}")
+        return user
+    print(f"❌ No user found with ID: {user_id}")
+    return None
 
 @login_manager.unauthorized_handler
 def unauthorized():
-    return jsonify({"error": "Unauthorized"}), 401
+    print("❌ UNAUTHORIZED HANDLER TRIGGERED")
+    print(f"Current user authenticated: {current_user.is_authenticated}")
+    print(f"Request path: {request.path}")
+    print(f"Request cookies: {request.cookies}")
+    return jsonify({"error": "Unauthorized", "debug": "Session invalid or expired"}), 401
 
 #=========================================================
 #                   PUBLIC API ROUTES 
@@ -162,8 +173,12 @@ def announcements():
 
 @app.route('/api/login', methods=['POST', 'OPTIONS'])
 def api_login():
+    print(f"🔐 Login request received - Method: {request.method}")
+    print(f"Origin: {request.headers.get('Origin')}")
+    
     # Handle preflight OPTIONS request
     if request.method == 'OPTIONS':
+        print("✅ Handling OPTIONS preflight")
         response = jsonify({'status': 'ok'})
         response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
         response.headers.add('Access-Control-Allow-Credentials', 'true')
@@ -175,30 +190,53 @@ def api_login():
     username = data.get('username')
     password = data.get('password')
     
+    print(f"👤 Attempting login for username: {username}")
+    
     user = (
         Admin.query.filter_by(username=username).first()
         or Captain.query.filter_by(username=username).first()
     )
     
-    if user and check_password_hash(user.password_hash, password):
-        login_user(user, remember=True)  # remember=True helps with persistence
-        
-        # Use environment variable or default to production URL
-        base_url = os.environ.get('BASE_URL', 'https://houses-web.onrender.com')
-        
-        response_data = {
-            'success': True,
-            'role': 'admin' if isinstance(user, Admin) else 'captain',
-            'redirect': f'{base_url}/admin/dashboard' if isinstance(user, Admin) else f'{base_url}/captain/dashboard'
-        }
-        
-        response = jsonify(response_data)
-        # Explicitly set CORS headers
-        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        return response
+    if not user:
+        print(f"❌ User not found: {username}")
+        return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
     
-    return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
+    print(f"✅ User found: {user.username} (ID: {user.id})")
+    
+    if not check_password_hash(user.password_hash, password):
+        print(f"❌ Invalid password for user: {username}")
+        return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
+    
+    print(f"✅ Password verified for user: {username}")
+    
+    # Log the user in
+    login_result = login_user(user, remember=True)
+    print(f"🔑 login_user() result: {login_result}")
+    print(f"🔑 current_user.is_authenticated: {current_user.is_authenticated}")
+    print(f"🔑 current_user.id: {current_user.id if current_user.is_authenticated else 'N/A'}")
+    
+    # Use environment variable or default to production URL
+    base_url = os.environ.get('BASE_URL', 'https://houses-web.onrender.com')
+    
+    response_data = {
+        'success': True,
+        'role': 'admin' if isinstance(user, Admin) else 'captain',
+        'redirect': f'{base_url}/admin/dashboard' if isinstance(user, Admin) else f'{base_url}/captain/dashboard',
+        'user_id': user.id,
+        'username': user.username
+    }
+    
+    print(f"✅ Sending success response: {response_data}")
+    
+    response = jsonify(response_data)
+    # Explicitly set CORS headers
+    origin = request.headers.get('Origin', '*')
+    response.headers.add('Access-Control-Allow-Origin', origin)
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    
+    print(f"📤 Response headers: {dict(response.headers)}")
+    
+    return response
 
 @app.route('/login', methods=['GET'])
 def login():
@@ -217,9 +255,22 @@ def logout():
 @app.route("/api/me")
 @login_required
 def me():
+    print(f"👤 /api/me called - authenticated: {current_user.is_authenticated}")
     return jsonify({
         "id": current_user.id,
         "role": "admin" if isinstance(current_user, Admin) else "captain"
+    })
+
+# Add a debug endpoint
+@app.route("/api/debug/session")
+def debug_session():
+    """Debug endpoint to check session status"""
+    from flask import session
+    return jsonify({
+        "authenticated": current_user.is_authenticated,
+        "user_id": current_user.id if current_user.is_authenticated else None,
+        "session_data": dict(session),
+        "cookies": dict(request.cookies)
     })
 
 #=========================================================
