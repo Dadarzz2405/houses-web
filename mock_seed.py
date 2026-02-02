@@ -12,7 +12,9 @@ from models import (
     Announcement
 )
 
-PASSWORD = generate_password_hash("tes123")
+PASSWORD = generate_password_hash("tes123",
+        method='pbkdf2:sha256', 
+        salt_length=8)
 
 
 def seed_mock_data():
