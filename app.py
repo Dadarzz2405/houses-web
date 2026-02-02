@@ -14,25 +14,26 @@ app.config['SQLALCHEMY_DATABASE_URI'] = \
     'sqlite:///' + os.path.join(basedir, 'app.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '330bf9312848e19d9a88482a033cb4f566c4cbe06911fe1e452ebade42f0bc4c')
+
+# Session configuration - use Lax for same-site, None for cross-site
 app.config.update(
-    SESSION_COOKIE_SAMESITE="None",
-    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_SAMESITE="None",  # Required for cross-origin requests
+    SESSION_COOKIE_SECURE=True,      # Required when SameSite=None
     SESSION_COOKIE_HTTPONLY=True,
 )
 
-# Updated CORS configuration for production
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",  
-    "http://localhost:5000",  
-    "https://houses-web.onrender.com",
-    "https://darsahouse.netlify.app",  # Your Netlify domain
-]
-
+# CORS configuration - MUST allow credentials for cross-origin cookies
 CORS(app, 
-     resources={r"/api/*": {"origins": ALLOWED_ORIGINS}},
-     supports_credentials=True,
+     resources={r"/*": {"origins": [
+         "http://localhost:5173",
+         "http://localhost:5000",
+         "https://houses-web.onrender.com",
+         "https://darsahouse.netlify.app"
+     ]}},
+     supports_credentials=True,  # This is critical!
      allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     expose_headers=["Set-Cookie"]  # Allow cookies to be sent
 )
 
 db.init_app(app)
@@ -159,8 +160,17 @@ def announcements():
 #                   LOGIN/LOGOUT ROUTES
 #=========================================================
 
-@app.route('/api/login', methods=['POST'])
+@app.route('/api/login', methods=['POST', 'OPTIONS'])
 def api_login():
+    # Handle preflight OPTIONS request
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        return response
+    
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -171,23 +181,22 @@ def api_login():
     )
     
     if user and check_password_hash(user.password_hash, password):
-        login_user(user)
+        login_user(user, remember=True)  # remember=True helps with persistence
         
         # Use environment variable or default to production URL
         base_url = os.environ.get('BASE_URL', 'https://houses-web.onrender.com')
         
-        if isinstance(user, Admin):
-            return jsonify({
-                'success': True,
-                'role': 'admin',
-                'redirect': f'{base_url}/admin/dashboard'
-            })
-        else:
-            return jsonify({
-                'success': True,
-                'role': 'captain',
-                'redirect': f'{base_url}/captain/dashboard'
-            })
+        response_data = {
+            'success': True,
+            'role': 'admin' if isinstance(user, Admin) else 'captain',
+            'redirect': f'{base_url}/admin/dashboard' if isinstance(user, Admin) else f'{base_url}/captain/dashboard'
+        }
+        
+        response = jsonify(response_data)
+        # Explicitly set CORS headers
+        response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', '*'))
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
     
     return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
 
