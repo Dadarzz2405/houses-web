@@ -15,13 +15,12 @@ app.config['SQLALCHEMY_DATABASE_URI'] = \
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '330bf9312848e19d9a88482a033cb4f566c4cbe06911fe1e452ebade42f0bc4c')
 
+# Updated CORS configuration for production
 ALLOWED_ORIGINS = [
     "http://localhost:5173",  
     "http://localhost:5000",  
-    "https://houses-web.onrender.com",  
-    # Add your Netlify URL here once you deploy, e.g.:
-    # "https://gda-houses.netlify.app"
-    # "https://your-site-name.netlify.app"
+    "https://houses-web.onrender.com",
+    "https://darsahouse.netlify.app",  # Your Netlify domain
 ]
 
 CORS(app, 
@@ -165,7 +164,8 @@ def api_login():
     if user and check_password_hash(user.password_hash, password):
         login_user(user)
         
-        base_url = os.environ.get('BASE_URL', 'http://localhost:5000')
+        # Use environment variable or default to production URL
+        base_url = os.environ.get('BASE_URL', 'https://houses-web.onrender.com')
         
         if isinstance(user, Admin):
             return jsonify({
@@ -185,7 +185,7 @@ def api_login():
 @app.route('/login', methods=['GET'])
 def login():
     # Redirect to frontend login page
-    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://darsahouse.netlify.app')
     return redirect(f'{frontend_url}/login')
 
 @app.route('/logout')
@@ -193,7 +193,7 @@ def login():
 def logout():
     logout_user()
     flash('You have been logged out.', 'success')
-    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://darsahouse.netlify.app')
     return redirect(f'{frontend_url}/login')
 
 #=========================================================
