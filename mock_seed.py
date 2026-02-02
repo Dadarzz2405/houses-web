@@ -29,13 +29,38 @@ def seed_mock_data():
 
         # ================= HOUSES =================
         houses_data = [
-            ("Al-Ghuraab", "Inspired by the crow in the Qur’an"),
-            ("An-Nahl", "Inspired by the bee in the Qur’an"),
-            ("An-Nun", "Inspired by the great fish in the Qur’an"),
-            ("Al-Adiyat", "Inspired by the charging horses in the Qur’an"),
-            ("Al-Hudhud", "Inspired by the hoopoe bird in the Qur’an"),
-            ("An-Naml", "Inspired by the ants in the Qur’an"),
+            (
+                "Al-Ghuraab",
+                "Al-Ghuraab (الغراب) — Inspired by the crow mentioned in the Qur’an. "
+                "Represents learning through observation, humility, and moral awareness."
+            ),
+            (
+                "An-Nahl",
+                "An-Nahl (النحل) — Inspired by the bee mentioned in the Qur’an. "
+                "Symbolizes productivity, order, obedience, and service to others."
+            ),
+            (
+                "An-Nun",
+                "An-Nun (النون) — Inspired by the great fish associated with Prophet Yunus. "
+                "Represents patience, repentance, resilience, and self-reflection."
+            ),
+            (
+                "Al-Adiyat",
+                "Al-Adiyat (العاديات) — Inspired by the charging horses mentioned in the Qur’an. "
+                "Symbolizes discipline, loyalty, determination, and relentless effort."
+            ),
+            (
+                "Al-Hudhud",
+                "Al-Hudhud (الهدهد) — Inspired by the hoopoe bird mentioned in the Qur’an. "
+                "Represents intelligence, communication, courage, and responsibility."
+            ),
+            (
+                "An-Naml",
+                "An-Naml (النمل) — Inspired by the ants mentioned in the Qur’an. "
+                "Symbolizes teamwork, awareness, humility, and care for the community."
+            ),
         ]
+
 
         houses = {}
         for name, desc in houses_data:

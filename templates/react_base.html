@@ -14,7 +14,11 @@
 <body>
     <div id="root"></div>
     
+    <!-- React App will be injected here by Vite in development -->
+    <!-- In production, you'll need to build and serve the static files -->
+    
     {% if config.ENV == 'development' %}
+        <!-- Development mode - Vite dev server -->
         <script type="module">
             import RefreshRuntime from 'http://localhost:5173/@react-refresh'
             RefreshRuntime.injectIntoGlobalHook(window)
@@ -25,6 +29,7 @@
         <script type="module" src="http://localhost:5173/@vite/client"></script>
         <script type="module" src="http://localhost:5173/src/main.jsx"></script>
     {% else %}
+        <!-- Production mode - built static files -->
         <link rel="stylesheet" href="{{ url_for('static', filename='dist/assets/index.css') }}">
         <script type="module" src="{{ url_for('static', filename='dist/assets/index.js') }}"></script>
     {% endif %}
