@@ -16,10 +16,11 @@ from cloudinary.utils import cloudinary_url
 load_dotenv()
 
 app = Flask(__name__)
-if os.getenv("RENDER"):
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
-else:
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URI")
+database_url = os.getenv("DATABASE_URL") or os.getenv("DATABASE_URI")
+# SQLAlchemy 2.0 requires postgresql:// instead of postgres://
+if database_url and database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.environ.get(
     'SECRET_KEY',
