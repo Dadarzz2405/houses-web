@@ -197,6 +197,7 @@ def announcements():
             "id": a.id,
             "title": a.title,
             "content": a.content,
+            "image_url": a.image_url,
             "created_at": a.created_at.isoformat(),
             "house": {"id": a.house.id, "name": a.house.name},
             "captain": {
@@ -310,7 +311,6 @@ def admin_add_points():
     if not house_id or not points or not reason:
         return jsonify({"error": "All fields are required"}), 400
 
-    # ✅ Convert to int
     try:
         points = int(points)
     except (TypeError, ValueError):
@@ -466,6 +466,7 @@ def captain_dashboard():
                 "id": a.id,
                 "title": a.title,
                 "content": a.content,
+                "image_url": a.image_url,  
                 "created_at": a.created_at.isoformat()
             }
             for a in my_announcements
@@ -476,19 +477,59 @@ def captain_dashboard():
 @login_required
 @captain_required
 def captain_create_announcement():
-    data = request.get_json()
-    title = data.get('title', '').strip()
-    content = data.get('content', '').strip()
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        title = request.form.get('title', '').strip()
+        content = request.form.get('content', '').strip()
+        image_file = request.files.get('image')
+    else:
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        content = data.get('content', '').strip()
+        image_file = None
 
+    # Validation
     if not title or not content:
         return jsonify({"error": "Title and content are required"}), 400
     
     if len(title) > 200:
         return jsonify({"error": "Title must be less than 200 characters"}), 400
     
+    image_url = None
+    
+    if image_file and image_file.filename:
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_ext = image_file.filename.rsplit('.', 1)[1].lower() if '.' in image_file.filename else ''
+        
+        if file_ext not in allowed_extensions:
+            return jsonify({
+                "error": "Invalid file type. Allowed: png, jpg, jpeg, gif, webp"
+            }), 400
+        
+        image_file.seek(0, 2)  
+        file_size = image_file.tell()
+        image_file.seek(0)  
+        
+        if file_size > 5 * 1024 * 1024:  
+            return jsonify({"error": "File too large. Maximum size is 5MB"}), 400
+        
+        try:
+            upload_result = cloudinary.uploader.upload(
+                image_file,
+                folder="announcements",
+                public_id=f"announcement_{current_user.house_id}_{datetime.utcnow().timestamp()}",
+                overwrite=True,
+                resource_type="image"
+            )
+            
+            image_url = upload_result['secure_url']
+            
+        except Exception as e:
+            return jsonify({"error": f"Failed to upload image: {str(e)}"}), 500
+    
     announcement = Announcement(
         title=title,
         content=content,
+        image_url=image_url,  
         house_id=current_user.house_id,
         captain_id=current_user.id,
         created_at=datetime.utcnow()
@@ -504,6 +545,7 @@ def captain_create_announcement():
             "id": announcement.id,
             "title": announcement.title,
             "content": announcement.content,
+            "image_url": announcement.image_url,  
             "created_at": announcement.created_at.isoformat()
         }
     })
@@ -517,6 +559,15 @@ def captain_delete_announcement(announcement_id):
     if announcement.captain_id != current_user.id:
         return jsonify({"error": "You can only delete your own announcements"}), 403
     
+    if announcement.image_url:
+        try:
+            public_id_match = announcement.image_url.split('/announcements/')
+            if len(public_id_match) > 1:
+                public_id = 'announcements/' + public_id_match[1].split('.')[0]
+                cloudinary.uploader.destroy(public_id)
+        except Exception as e:
+            print(f"Failed to delete image from Cloudinary: {e}")
+    
     db.session.delete(announcement)
     db.session.commit()
     
@@ -524,7 +575,6 @@ def captain_delete_announcement(announcement_id):
         "success": True,
         "message": "Announcement deleted successfully"
     })
-
 # =====================
 # ERROR HANDLERS
 # =====================
